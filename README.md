@@ -70,10 +70,6 @@ The results are saved inside the same image folder:
 - `ocr_results.csv` - one row per image. Open it in Excel or any
   spreadsheet program.
 - `ocr_results.json` - the same results in JSON format.
-- `ocr_raw_text/` - the raw text the OCR read from each image. Useful for
-  checking a value.
-- `.ocr_crops/` - the small image pieces that were read. You can delete
-  this folder.
 
 ## Good to know
 

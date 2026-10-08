@@ -710,12 +710,11 @@ def parse_region(template: str, region_name: str, text: str) -> dict:
     }
 
 
-def process_image(src: Path, workdir: Path, raw_dir: Path) -> dict:
+def process_image(src: Path, workdir: Path) -> dict:
     template = detect_template(src, workdir)
     regions = TEMPLATE_REGIONS[template]
 
     record = {"file": src.name, "template": template}
-    raw_chunks = [f"# {src.name} ({template})\n"]
 
     for region_name, box in regions.items():
         if region_name == "header":
@@ -723,12 +722,7 @@ def process_image(src: Path, workdir: Path, raw_dir: Path) -> dict:
         crop_path = workdir / f"{src.stem}_{region_name}.png"
         make_crop(src, box, crop_path)
         text = run_ocr(crop_path)
-        raw_chunks.append(f"## {region_name}\n{text}\n")
-
         record.update(parse_region(template, region_name, text))
-
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    (raw_dir / f"{src.stem}.md").write_text("\n".join(raw_chunks), encoding="utf-8")
 
     return record
 
@@ -772,19 +766,22 @@ def main():
 
     out_base = args.out or (args.folder / "ocr_results")
     workdir = args.folder / ".ocr_crops"
-    raw_dir = args.folder / "ocr_raw_text"
     workdir.mkdir(exist_ok=True)
 
     records = []
-    for i, img in enumerate(images, 1):
-        print(f"[{i}/{len(images)}] {img.name} ...", flush=True)
-        try:
-            record = process_image(img, workdir, raw_dir)
-            records.append(record)
-            print(f"    -> {len(record) - 2} fields extracted")
-        except Exception as e:
-            print(f"    !! FAILED: {e}", file=sys.stderr)
-            records.append({"file": img.name, "template": "ERROR", "error": str(e)})
+    try:
+        for i, img in enumerate(images, 1):
+            print(f"[{i}/{len(images)}] {img.name} ...", flush=True)
+            try:
+                record = process_image(img, workdir)
+                records.append(record)
+                print(f"    -> {len(record) - 2} fields extracted")
+            except Exception as e:
+                print(f"    !! FAILED: {e}", file=sys.stderr)
+                records.append({"file": img.name, "template": "ERROR", "error": str(e)})
+    finally:
+        # The crops are only intermediate OCR inputs; don't leave them behind.
+        shutil.rmtree(workdir, ignore_errors=True)
 
     # JSON (nested, keeps every field per image)
     json_path = out_base.with_suffix(".json")
@@ -804,7 +801,6 @@ def main():
 
     print(f"\nWrote {json_path}")
     print(f"Wrote {csv_path}")
-    print(f"Raw per-region OCR text: {raw_dir}/")
 
 
 if __name__ == "__main__":
